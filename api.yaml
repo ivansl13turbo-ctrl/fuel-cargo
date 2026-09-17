@@ -1,0 +1,1505 @@
+openapi: 3.0.3
+info:
+  title: Cargotech Fuel API
+  version: 0.2.0
+  description: |
+    API для станций, проливов и балансов.
+    Публичные методы `/api/v1/*` требуют заголовок `X-Api-Key`.
+    Callback'и FuelUp (`/api/order/*`) аутентифицируются через `apikey` в form-body.
+
+servers:
+  - url: http://localhost:8080
+    description: Local
+
+tags:
+  - name: stations
+    description: Станции (АЗС)
+  - name: fuelings
+    description: Проливы
+  - name: balances
+    description: Балансы на поездку
+  - name: companies
+    description: Компании (контракты)
+  - name: users
+    description: Пользователи компаний
+  - name: callbacks
+    description: Callback-эндпоинты FuelUp → партнёр (без X-Api-Key)
+
+paths:
+  /api/v1/stations:
+    get:
+      tags: [stations]
+      summary: Список АЗС
+      operationId: getStations
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: brand
+          in: query
+          required: false
+          description: Фильтр по brand станции
+          schema:
+            type: string
+            example: Газпромнефть
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Station"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/stations/{id}:
+    get:
+      tags: [stations]
+      summary: Информация об АЗС
+      operationId: getStationById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/stations/{id}/prices:
+    get:
+      tags: [stations]
+      summary: Цены на АЗС
+      operationId: getStationPrices
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricesResponse"
+              example:
+                prices:
+                  ai_92: 52.40
+                  ai_95: 56.10
+                  diesel: 58.90
+                total: 3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/stations/{id}/pumps:
+    get:
+      tags: [stations]
+      summary: Список колонок
+      operationId: getStationPumps
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StationId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PumpsResponse"
+              example:
+                pumps:
+                  - id: "1"
+                    number: 1
+                    status: idle
+                    fuels:
+                      ai_92: "АИ-92"
+                      ai_95: "АИ-95"
+                  - id: "2"
+                    number: 2
+                    status: idle
+                    fuels:
+                      ai_95: "АИ-95"
+                      diesel: "ДТ"
+                total: 2
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/stations/{id}/pumps/{number}:
+    get:
+      tags: [stations]
+      summary: Колонка по номеру
+      operationId: getStationPump
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StationId"
+        - name: number
+          in: path
+          required: true
+          description: Номер колонки
+          schema:
+            type: string
+          example: "1"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pump"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "pump not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/fuelings:
+    get:
+      tags: [fuelings]
+      summary: Список проливов пользователя
+      operationId: getFuelings
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserIdQuery"
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 10
+        - name: stationId
+          in: query
+          required: false
+          description: Фильтр по станции
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FuelingsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/fuelings/{id}:
+    get:
+      tags: [fuelings]
+      summary: Информация о проливе
+      operationId: getFuelingById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FuelingId"
+        - $ref: "#/components/parameters/UserIdQuery"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fueling"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    put:
+      tags: [fuelings]
+      summary: Создать пролив
+      description: |
+        Lock баланса → POST /order в FuelUp.
+        Успешный ответ: статус `approved` (placed придёт callback'ом Accept).
+      operationId: createFueling
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FuelingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFueling"
+            example:
+              userId: "user-9272"
+              deliveryOrderId: "delivery-100"
+              fuel: ai_95
+              station: "cdeb1d21e5144782bc7f3e969e763646"
+              liters: 10.0
+              pump: "1"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fueling"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Конфликт (колонка занята, нехватка баланса, вендор)
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags: [fuelings]
+      summary: Отменить пролив
+      description: Отмена заказа на АЗС и unlock холда.
+      operationId: cancelFueling
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FuelingId"
+        - $ref: "#/components/parameters/UserIdQuery"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FuelingOk"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Нельзя отменить активный или завершённый пролив
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/fuelings/{id}/check:
+    post:
+      tags: [fuelings]
+      summary: Проверить пролив
+      description: |
+        Проверка перед созданием: станция, колонка (ping Sber), топливо, цена у Sber.
+        Если цена изменилась — обновляет прайс в БД и возвращает `fuelings-price-changed`.
+        Не сохраняет пролив и не холдит баланс. Статус в ответе: `check`.
+      operationId: checkFueling
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FuelingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFueling"
+            example:
+              userId: "user-9272"
+              deliveryOrderId: "delivery-100"
+              fuel: ai_95
+              station: "cdeb1d21e5144782bc7f3e969e763646"
+              liters: 10.0
+              pump: "1"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fueling"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Колонка занята / станция disabled
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/balances:
+    get:
+      tags: [balances]
+      summary: Список или один баланс
+      description: |
+        `user_id` — список балансов.
+        `user_id` + `delivery_order_id` — баланс поездки.
+      operationId: getBalances
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "user-9272"
+        - name: delivery_order_id
+          in: query
+          required: false
+          schema:
+            type: string
+          example: "delivery-100"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/Balance"
+                  - $ref: "#/components/schemas/BalancesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags: [balances]
+      summary: Создать баланс
+      operationId: createBalance
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBalance"
+            example:
+              userId: "user-9272"
+              deliveryOrderId: "delivery-100"
+              amount: 5000.00
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Баланс на эту поездку уже есть
+
+  /api/v1/balances/{id}:
+    get:
+      tags: [balances]
+      summary: Получить баланс
+      operationId: getBalanceById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [balances]
+      summary: Деактивировать баланс
+      description: Ставит `active=false`. Нельзя, если есть locked.
+      operationId: deactivateBalance
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Есть захолдированные средства
+
+  /api/v1/companies:
+    get:
+      tags: [companies]
+      summary: Список компаний
+      operationId: listCompanies
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: contract_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: include_deleted
+          in: query
+          required: false
+          description: Включать soft-deleted (по умолчанию false)
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompaniesResponse"
+    put:
+      tags: [companies]
+      summary: Создать компанию
+      description: |
+        `id` в теле — внешний company_id.
+        `contractId` опционален (заглушка, может быть null).
+      operationId: createCompany
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompany"
+            example:
+              id: "company-100"
+              contractId: null
+              isActive: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Компания с таким id уже есть
+
+  /api/v1/companies/{id}:
+    get:
+      tags: [companies]
+      summary: Компания по id
+      operationId: getCompanyById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: company_id
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [companies]
+      summary: Обновить флаги компании
+      description: |
+        Обновляет `isActive`, `deleted` и/или `contractId`.
+        При `deleted=true` автоматически ставит `isActive=false`.
+        Пустая строка в `contractId` сбрасывает поле в null.
+      operationId: updateCompany
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompany"
+            example:
+              isActive: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users:
+    get:
+      tags: [users]
+      summary: Список пользователей
+      operationId: listUsers
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: company_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: is_active
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersResponse"
+    put:
+      tags: [users]
+      summary: Создать пользователя
+      description: |
+        `userId` в теле — внешний user_id.
+        `roles` — список `ADMIN` / `DRIVER`.
+      operationId: createUser
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUser"
+            example:
+              userId: "user-100"
+              roles: [DRIVER]
+              companyId: "company-100"
+              isActive: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Пользователь с таким userId уже есть
+
+  /api/v1/users/{userId}:
+    get:
+      tags: [users]
+      summary: Пользователь по userId
+      operationId: getUserById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [users]
+      summary: Обновить пользователя
+      description: |
+        Обновляет `isActive`, `roles` и/или `companyId`.
+      operationId: updateUser
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUser"
+            example:
+              isActive: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/order/accept:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Accept
+      description: |
+        §4.1. Заказ принят FuelUp. Form: `apikey`, `orderId`.
+        Статус пролива → `placed`. Не-200 → FuelUp шлёт Canceled.
+      operationId: fuelUpOrderAccept
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+  /api/order/fueling:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Fueling
+      description: |
+        §4.2. Готов пуск колонки. Form: `apikey`, `orderId`.
+        Статус пролива → `start`. Не-200 → FuelUp шлёт Canceled.
+      operationId: fuelUpOrderFueling
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+  /api/order/canceled:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Canceled
+      description: |
+        §4.3. Form: `apikey`, `orderId`, `reason`.
+        Статус → `cancelled`, unlock холда.
+      operationId: fuelUpOrderCanceled
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId, reason]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+                reason: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+  /api/order/completed:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Completed
+      description: |
+        §4.4. Form: `apikey`, `orderId`, `litre`
+        (+ опционально `extendedOrderId`, `extendedDate`).
+        Capture фактической суммы; `extendedOrderId` → `vendor_fueling_id`.
+        Не-200 → FuelUp ретраит.
+      operationId: fuelUpOrderCompleted
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId, litre]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+                litre:
+                  type: string
+                  description: double с точкой, напр. 9.85
+                extendedOrderId: { type: string }
+                extendedDate:
+                  type: string
+                  description: dd.MM.yyyy HH:mm:ss
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+  /api/order/volume:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Volume
+      description: |
+        §4.5. Счётчик налива каждые 5–10 с. Form: `apikey`, `orderId`, `litre`.
+        Статус пролива → `process`.
+      operationId: fuelUpOrderVolume
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId, litre]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+                litre: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+  /api/order/message:
+    post:
+      tags: [callbacks]
+      summary: FuelUp → Message
+      description: |
+        §4.6. Form: `apikey`, `orderId`, `msg`.
+        Сейчас только логируется.
+      operationId: fuelUpOrderMessage
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [apikey, orderId, msg]
+              properties:
+                apikey: { type: string }
+                orderId: { type: string }
+                msg: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid API key
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API-ключ для /api/v1/*
+
+  parameters:
+    StationId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор АЗС
+      schema:
+        type: string
+      example: "cdeb1d21e5144782bc7f3e969e763646"
+
+    FuelingId:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор пролива
+      schema:
+        type: string
+      example: "d979d2ae-3e2d-4fa9-aeb0-02298af92fbf"
+
+    UserIdQuery:
+      name: user_id
+      in: query
+      required: true
+      description: Идентификатор пользователя
+      schema:
+        type: string
+      example: "user-9272"
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "bad_request"
+            message: "Invalid fueling request"
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "station not found"
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "internal_error"
+            message: "Internal server error"
+
+  schemas:
+    Station:
+      type: object
+      required:
+        - id
+        - status
+        - type
+        - nozzle
+        - subnet
+        - brand
+        - name
+        - address
+        - location
+        - point
+      properties:
+        id:
+          type: string
+          example: "cdeb1d21e5144782bc7f3e969e763646"
+        status:
+          $ref: "#/components/schemas/StationStatus"
+        type:
+          $ref: "#/components/schemas/StationType"
+        nozzle:
+          $ref: "#/components/schemas/StationNozzleMode"
+        subnet:
+          type: string
+          example: "Трасса"
+        brand:
+          type: string
+          example: Газпромнефть
+        name:
+          type: string
+          example: "Газпромнефть прямой GPAY АЗС №1 Тест КСПД"
+        address:
+          type: string
+          example: "Ростовская область, Божковское сельское поселение"
+        location:
+          type: string
+          example: rostov
+        timezone:
+          type: string
+          default: "03"
+          example: "03"
+        point:
+          $ref: "#/components/schemas/Point"
+        fuels:
+          type: object
+          description: Внутренний код топлива → фактическое имя с вендора
+          additionalProperties:
+            type: string
+          example:
+            ai_92: "АИ-92"
+            ai_95: "G-Drive 95"
+            diesel: "ДТ"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/GasStationService"
+          example: [shop, toilet]
+        prices:
+          type: object
+          description: Код топлива → цена за литр
+          additionalProperties:
+            type: number
+          example:
+            ai_92: 52.40
+            ai_95: 56.10
+
+    StationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Station"
+        - type: object
+          properties:
+            limits:
+              type: object
+              nullable: true
+              description: |
+                Лимиты пролива по коду топлива (из `fueling-limits.<vendor>`).
+                Ключ — внутренний код топлива; значение — min/max/default литры.
+              additionalProperties:
+                $ref: "#/components/schemas/FuelingLimits"
+              example:
+                ai_92:
+                  min: 2
+                  max: 150
+                  default: 50
+                ai_95:
+                  min: 2
+                  max: 150
+                  default: 50
+
+    FuelingLimits:
+      type: object
+      required: [min, max, default]
+      properties:
+        min:
+          type: number
+          description: Минимальный объём, литры
+          example: 2
+        max:
+          type: number
+          description: Максимальный объём, литры
+          example: 150
+        default:
+          type: number
+          description: Объём по умолчанию, литры
+          example: 50
+
+    PricesResponse:
+      type: object
+      required: [prices, total]
+      properties:
+        prices:
+          type: object
+          additionalProperties:
+            type: number
+          example:
+            ai_92: 39.98
+            ai_95: 42.45
+        total:
+          type: integer
+          example: 2
+
+    PumpsResponse:
+      type: object
+      required: [pumps, total]
+      properties:
+        pumps:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pump"
+        total:
+          type: integer
+          example: 2
+
+    Pump:
+      type: object
+      required: [id, number, status, fuels]
+      properties:
+        id:
+          type: string
+          example: "1"
+        number:
+          type: integer
+          format: int32
+          example: 1
+        status:
+          $ref: "#/components/schemas/PumpStatus"
+        fuels:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            ai_92: "АИ-92"
+            ai_95: "АИ-95"
+
+    Point:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          format: double
+          example: 48.178869
+        lon:
+          type: number
+          format: double
+          example: 40.265524
+
+    StationStatus:
+      type: string
+      enum: [active, disabled]
+      example: active
+
+    StationType:
+      type: string
+      enum: [fixed, mobile]
+      example: fixed
+
+    StationNozzleMode:
+      type: string
+      enum: [after, before, both]
+      example: both
+
+    PumpStatus:
+      type: string
+      enum: [idle, fueling, takeoff, inactive, pending_payment]
+      example: idle
+
+    GasStationService:
+      type: string
+      enum: [shop, cafe, toilet]
+      example: shop
+
+    StationMinimal:
+      type: object
+      required: [id, type, name, subnet, brand, address, location, point]
+      properties:
+        id:
+          type: string
+          example: "cdeb1d21e5144782bc7f3e969e763646"
+        type:
+          $ref: "#/components/schemas/StationType"
+        name:
+          type: string
+          example: "ГАЗПРОМ №159"
+        subnet:
+          type: string
+          example: ""
+        brand:
+          type: string
+          example: GPN
+        address:
+          type: string
+          example: "Ростовская область"
+        location:
+          type: string
+          example: rostov
+        point:
+          $ref: "#/components/schemas/Point"
+        timezone:
+          type: string
+          example: "03"
+
+    CreateFueling:
+      type: object
+      required: [userId, deliveryOrderId, fuel, station, liters, pump]
+      properties:
+        userId:
+          type: string
+          example: "user-9272"
+        deliveryOrderId:
+          type: string
+          example: "delivery-100"
+        fuel:
+          type: string
+          description: Код топлива (ai_92, ai_95, diesel, …)
+          example: ai_95
+        station:
+          type: string
+          example: "cdeb1d21e5144782bc7f3e969e763646"
+        liters:
+          type: number
+          format: double
+          description: |
+            Объём в литрах. Должен быть в пределах `fueling-limits.<vendor>` (min/max) для вендора станции.
+          example: 10.0
+        pump:
+          type: string
+          description: Номер колонки
+          example: "1"
+
+    PaidLiters:
+      type: object
+      required: [liters, money, price]
+      properties:
+        liters:
+          type: number
+          format: double
+          example: 10.0
+        money:
+          type: number
+          format: double
+          example: 561.0
+        price:
+          type: number
+          format: double
+          description: Цена за литр, 2 знака после запятой
+          example: 56.10
+
+    ExtraFuelings:
+      type: object
+      properties:
+        companyId:
+          type: string
+          nullable: true
+          example: "company-100"
+        balanceId:
+          type: string
+          nullable: true
+          example: "7f1c3a2e-4b5d-6e7f-8091-a2b3c4d5e6f7"
+
+    FuelingStatus:
+      type: string
+      enum: [check, approved, placed, start, process, cancelled, completed]
+      example: approved
+
+    Fueling:
+      type: object
+      required:
+        - id
+        - userId
+        - status
+        - station
+        - pump
+        - fuel
+        - fuelName
+        - paidLiters
+        - data
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: "d979d2ae-3e2d-4fa9-aeb0-02298af92fbf"
+        userId:
+          type: string
+          example: "user-9272"
+        status:
+          $ref: "#/components/schemas/FuelingStatus"
+        reason:
+          type: string
+          nullable: true
+          example: "cancelled by user"
+        station:
+          $ref: "#/components/schemas/StationMinimal"
+        pump:
+          type: string
+          example: "1"
+        fuel:
+          type: string
+          example: ai_95
+        fuelName:
+          type: string
+          example: "АИ-95"
+        paidLiters:
+          $ref: "#/components/schemas/PaidLiters"
+        factPaidLiters:
+          allOf:
+            - $ref: "#/components/schemas/PaidLiters"
+          nullable: true
+          description: Фактический пролив после completed
+        data:
+          $ref: "#/components/schemas/ExtraFuelings"
+        createdAt:
+          type: integer
+          format: int64
+          example: 1711110573714
+        updatedAt:
+          type: integer
+          format: int64
+          example: 1711110574436
+        finishedAt:
+          type: integer
+          format: int64
+          nullable: true
+          example: 1711110574436
+
+    FuelingOk:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    FuelingsResponse:
+      type: object
+      required: [fuelings, total, page, size]
+      properties:
+        fuelings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fueling"
+        total:
+          type: integer
+          example: 13
+        page:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 10
+
+    CreateBalance:
+      type: object
+      required: [userId, deliveryOrderId]
+      properties:
+        userId:
+          type: string
+          example: "user-9272"
+        deliveryOrderId:
+          type: string
+          example: "delivery-100"
+        amount:
+          type: number
+          description: Начальное пополнение (available)
+          example: 5000.00
+
+    Balance:
+      type: object
+      required: [id, userId, deliveryOrderId, available, locked, active]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        deliveryOrderId:
+          type: string
+        available:
+          type: number
+          example: 4500.00
+        locked:
+          type: number
+          example: 500.00
+        active:
+          type: boolean
+          example: true
+
+    BalancesResponse:
+      type: object
+      required: [balances, total]
+      properties:
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/Balance"
+        total:
+          type: integer
+          example: 1
+
+    CreateCompany:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Внешний company_id
+          example: "company-100"
+        contractId:
+          type: string
+          nullable: true
+          description: Заглушка, может быть null
+          example: null
+        isActive:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateCompany:
+      type: object
+      properties:
+        isActive:
+          type: boolean
+          nullable: true
+        deleted:
+          type: boolean
+          nullable: true
+          description: Soft-delete; при true isActive станет false
+        contractId:
+          type: string
+          nullable: true
+          description: Пустая строка сбрасывает в null
+
+    Company:
+      type: object
+      required: [id, isActive, deleted, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: Внешний company_id
+          example: "company-100"
+        contractId:
+          type: string
+          nullable: true
+          example: null
+        isActive:
+          type: boolean
+          example: true
+        deleted:
+          type: boolean
+          example: false
+        createdAt:
+          type: integer
+          format: int64
+          description: Unix timestamp ms
+        updatedAt:
+          type: integer
+          format: int64
+          description: Unix timestamp ms
+
+    CompaniesResponse:
+      type: object
+      required: [companies, total]
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Company"
+        total:
+          type: integer
+          example: 1
+
+    UserRole:
+      type: string
+      enum: [ADMIN, DRIVER]
+
+    CreateUser:
+      type: object
+      required: [userId, roles, companyId]
+      properties:
+        userId:
+          type: string
+          description: Внешний user_id
+          example: "user-100"
+        roles:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/UserRole"
+          example: [DRIVER]
+        companyId:
+          type: string
+          example: "company-100"
+        isActive:
+          type: boolean
+          default: true
+          example: true
+
+    UpdateUser:
+      type: object
+      properties:
+        isActive:
+          type: boolean
+          nullable: true
+        roles:
+          type: array
+          nullable: true
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/UserRole"
+        companyId:
+          type: string
+          nullable: true
+
+    User:
+      type: object
+      required: [userId, roles, companyId, isActive, createdAt, updatedAt]
+      properties:
+        userId:
+          type: string
+          example: "user-100"
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserRole"
+          example: [DRIVER]
+        companyId:
+          type: string
+          example: "company-100"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: integer
+          format: int64
+          description: Unix timestamp ms
+        updatedAt:
+          type: integer
+          format: int64
+          description: Unix timestamp ms
+
+    UsersResponse:
+      type: object
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+          example: 1
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
